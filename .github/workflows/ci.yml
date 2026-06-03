@@ -86,9 +86,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Log in to GitHub Container Registry (GHCR)
         uses: docker/login-action@v3
         with:
@@ -97,13 +94,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build Local Image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile
-          load: true
-          tags: beliaja-backend:ci
-          cache-from: type=gha
+        run: |
+          docker build -t beliaja-backend:ci .
 
       - name: Run Trivy Security Scan
         uses: aquasecurity/trivy-action@master
@@ -117,16 +109,13 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload SARIF to GitHub Security Alerts
-        uses: github/codeql-action/upload-sarif@v3
         if: always()
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: 'trivy-results.sarif'
 
       - name: Build & Push verified Image to GHCR
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository }}/backend:ci
-          cache-from: type=gha
+        run: |
+          docker tag beliaja-backend:ci ghcr.io/${{ github.repository }}/backend:ci
+          docker push ghcr.io/${{ github.repository }}/backend:ci
+
