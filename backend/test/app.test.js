@@ -186,12 +186,88 @@ describe('E-Commerce API Endpoints', () => {
     });
   });
 
-  // Cleanup newly created products
+  describe('Auth Endpoints', () => {
+    const testUser = {
+      name: "Test Customer",
+      email: "test.customer@example.com",
+      password: "secretpassword"
+    };
+
+    test('POST /api/v1/auth/register should create a new user account', async () => {
+      const res = await request(app)
+        .post('/api/v1/auth/register')
+        .send(testUser)
+        .expect(201);
+      
+      expect(res.body).toHaveProperty('id');
+      expect(res.body.email).toBe(testUser.email.toLowerCase());
+      expect(res.body.name).toBe(testUser.name);
+      expect(res.body).not.toHaveProperty('password');
+    });
+
+    test('POST /api/v1/auth/register should fail on duplicate email', async () => {
+      await request(app)
+        .post('/api/v1/auth/register')
+        .send(testUser)
+        .expect(400);
+    });
+
+    test('POST /api/v1/auth/login should authenticate registered credentials', async () => {
+      const res = await request(app)
+        .post('/api/v1/auth/login')
+        .send({
+          email: testUser.email,
+          password: testUser.password
+        })
+        .expect(200);
+      
+      expect(res.body).toHaveProperty('token');
+      expect(res.body.email).toBe(testUser.email.toLowerCase());
+    });
+
+    test('POST /api/v1/auth/login should fail on wrong password', async () => {
+      await request(app)
+        .post('/api/v1/auth/login')
+        .send({
+          email: testUser.email,
+          password: "wrongpassword"
+        })
+        .expect(401);
+    });
+  });
+
+  describe('Customer Orders Endpoint', () => {
+    test('GET /api/v1/orders/customer should retrieve orders for specific email', async () => {
+      const res = await request(app)
+        .get('/api/v1/orders/customer?email=alice.j@example.com')
+        .expect(200);
+      expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBeGreaterThan(0);
+      expect(res.body[0].customerEmail).toBe('alice.j@example.com');
+    });
+
+    test('GET /api/v1/orders/customer should fail if email is missing', async () => {
+      await request(app)
+        .get('/api/v1/orders/customer')
+        .expect(400);
+    });
+  });
+
+  // Cleanup newly created products and users
   afterAll(async () => {
     if (createdProductId) {
       await request(app)
         .delete(`/api/v1/products/${createdProductId}`)
         .expect(200);
     }
+    const fs = require('fs');
+    const path = require('path');
+    const dbPath = path.join(__dirname, '../db.json');
+    if (fs.existsSync(dbPath)) {
+      const data = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+      data.users = (data.users || []).filter(u => u.email !== 'test.customer@example.com');
+      fs.writeFileSync(dbPath, JSON.stringify(data, null, 2), 'utf8');
+    }
   });
 });
+

@@ -1,11 +1,12 @@
 {
+  "users": [],
   "products": [
     {
       "id": "prod-1",
       "name": "Quantum Noise-Cancelling Headphones",
       "sku": "ELC-QNTM-01",
       "price": 199.99,
-      "stock": 14,
+      "stock": 4,
       "category": "Electronics",
       "description": "Experience absolute silence with hybrid active noise cancellation. 40-hour battery life, high-res audio drivers, and ergonomic memory foam earcups.",
       "imageUrl": "https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop&q=60"
@@ -15,7 +16,7 @@
       "name": "AeroGlide Performance Running Shoes",
       "sku": "SHO-AERO-02",
       "price": 125.5,
-      "stock": 28,
+      "stock": 17,
       "category": "Sports",
       "description": "Engineered for maximum speed and shock absorption. Breathable mesh upper, nitrogen-infused foam midsole, and durable rubber traction grip.",
       "imageUrl": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=500&auto=format&fit=crop&q=60"
@@ -25,7 +26,7 @@
       "name": "Classic Leather Minimalist Watch",
       "sku": "ACC-CLSW-03",
       "price": 89,
-      "stock": 3,
+      "stock": 0,
       "category": "Accessories",
       "description": "Timeless elegance for the modern professional. Genuine Italian leather strap, surgical-grade stainless steel case, and precise Japanese quartz movement.",
       "imageUrl": "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500&auto=format&fit=crop&q=60"
@@ -35,7 +36,7 @@
       "name": "Premium Bamboo Fiber Bed Sheets",
       "sku": "HOM-BAMB-04",
       "price": 75,
-      "stock": 50,
+      "stock": 40,
       "category": "Home & Living",
       "description": "Silky soft, highly breathable, and naturally hypoallergenic. Crafted from 100% organic bamboo fiber with deep-pocket design to fit any mattress.",
       "imageUrl": "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=500&auto=format&fit=crop&q=60"
@@ -45,7 +46,7 @@
       "name": "Ergonomic Memory Foam Lumbar Support",
       "sku": "OFF-ERGO-05",
       "price": 45,
-      "stock": 0,
+      "stock": 80,
       "category": "Office",
       "description": "Alleviate back strain and improve posture. Premium high-density memory foam with adjustable straps and a breathable, washable mesh cover.",
       "imageUrl": "https://images.unsplash.com/photo-1580481072645-022f9a6dbf27?w=500&auto=format&fit=crop&q=60"
@@ -267,6 +268,64 @@
       "totalAmount": 125.5,
       "status": "Processing",
       "createdAt": "2026-06-03T07:49:50.510Z"
+    },
+    {
+      "id": "ord-5fcb97de",
+      "orderNumber": "BELI-1013",
+      "customerName": "ditssss",
+      "customerEmail": "custmer@mail.com",
+      "items": [
+        {
+          "productId": "prod-5",
+          "name": "Ergonomic Memory Foam Lumbar Support",
+          "price": 45,
+          "quantity": 20
+        },
+        {
+          "productId": "prod-3",
+          "name": "Classic Leather Minimalist Watch",
+          "price": 89,
+          "quantity": 3
+        },
+        {
+          "productId": "prod-4",
+          "name": "Premium Bamboo Fiber Bed Sheets",
+          "price": 75,
+          "quantity": 10
+        },
+        {
+          "productId": "prod-1",
+          "name": "Quantum Noise-Cancelling Headphones",
+          "price": 199.99,
+          "quantity": 10
+        },
+        {
+          "productId": "prod-2",
+          "name": "AeroGlide Performance Running Shoes",
+          "price": 125.5,
+          "quantity": 10
+        }
+      ],
+      "totalAmount": 5430.49,
+      "status": "Shipped",
+      "createdAt": "2026-06-03T08:48:01.180Z"
+    },
+    {
+      "id": "ord-c2fb7e5e",
+      "orderNumber": "BELI-1014",
+      "customerName": "Alice Jest",
+      "customerEmail": "alice.j@example.com",
+      "items": [
+        {
+          "productId": "prod-2",
+          "name": "AeroGlide Performance Running Shoes",
+          "price": 125.5,
+          "quantity": 1
+        }
+      ],
+      "totalAmount": 125.5,
+      "status": "Processing",
+      "createdAt": "2026-06-03T09:00:15.781Z"
     }
   ]
 }

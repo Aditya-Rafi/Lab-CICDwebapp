@@ -151,6 +151,54 @@ app.get(`${BASE_PATH}/customers`, (req, res) => {
   res.json(db.getCustomers());
 });
 
+// 5. AUTH ENDPOINTS
+app.post(`${BASE_PATH}/auth/register`, (req, res) => {
+  const { name, email, password } = req.body;
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Missing name, email, or password' });
+  }
+  const existingUser = db.getUserByEmail(email);
+  if (existingUser) {
+    return res.status(400).json({ error: 'Email already registered' });
+  }
+  const newUser = db.createUser({ name, email, password });
+  res.status(201).json(newUser);
+});
+
+app.post(`${BASE_PATH}/auth/login`, (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Missing email or password' });
+  }
+  const user = db.getUserByEmail(email);
+  if (!user) {
+    return res.status(401).json({ error: 'Invalid email or password' });
+  }
+  const crypto = require('crypto');
+  const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
+  if (user.password !== hashedPassword) {
+    return res.status(401).json({ error: 'Invalid email or password' });
+  }
+  res.json({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    token: 'simulated-token-' + user.id
+  });
+});
+
+// 6. CUSTOMER ORDERS ENDPOINT
+app.get(`${BASE_PATH}/orders/customer`, (req, res) => {
+  const { email } = req.query;
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+  const orders = db.getOrders();
+  const customerOrders = orders.filter(o => o.customerEmail.toLowerCase() === email.toLowerCase());
+  res.json(customerOrders);
+});
+
+
 // Start listening if run directly
 if (require.main === module) {
   app.listen(PORT, () => {

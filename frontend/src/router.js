@@ -42,6 +42,22 @@ const routes = [
     path: '/admin/system',
     name: 'SystemInfo',
     component: SystemInfo
+  },
+  {
+    path: '/login',
+    name: 'Login',
+    component: () => import('./views/Login.vue')
+  },
+  {
+    path: '/register',
+    name: 'Register',
+    component: () => import('./views/Register.vue')
+  },
+  {
+    path: '/my-orders',
+    name: 'MyOrders',
+    component: () => import('./views/MyOrders.vue'),
+    meta: { requiresAuth: true }
   }
 ];
 
@@ -50,4 +66,18 @@ const router = createRouter({
   routes
 });
 
+router.beforeEach((to, from, next) => {
+  const user = JSON.parse(localStorage.getItem('user'));
+  if (to.matched.some(record => record.meta.requiresAuth)) {
+    if (!user) {
+      next({ name: 'Login' });
+    } else {
+      next();
+    }
+  } else {
+    next();
+  }
+});
+
 export default router;
+

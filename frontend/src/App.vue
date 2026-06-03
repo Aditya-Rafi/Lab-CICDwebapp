@@ -63,6 +63,17 @@
           
           <nav class="header-nav">
             <router-link to="/" class="header-nav-item" active-class="active">Storefront</router-link>
+            
+            <template v-if="user">
+              <router-link to="/my-orders" class="header-nav-item" active-class="active">My Orders</router-link>
+              <span class="user-display">👤 {{ user.name }}</span>
+              <button class="btn-logout" @click="handleLogout">Logout</button>
+            </template>
+            <template v-else>
+              <router-link to="/login" class="header-nav-item" active-class="active">Login</router-link>
+              <router-link to="/register" class="header-nav-item" active-class="active">Register</router-link>
+            </template>
+
             <router-link to="/admin" class="header-nav-item admin-button">Admin Panel ⚙️</router-link>
           </nav>
         </div>
@@ -77,7 +88,7 @@
 </template>
 
 <script>
-import { computed } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { toasts } from './toast';
 
@@ -85,19 +96,44 @@ export default {
   name: 'App',
   setup() {
     const route = useRoute();
+    const user = ref(null);
+
+    const checkUser = () => {
+      user.value = JSON.parse(localStorage.getItem('user'));
+    };
+
+    const handleLogout = () => {
+      localStorage.removeItem('user');
+      checkUser();
+      window.dispatchEvent(new Event('auth-change'));
+      // Redirect to home storefront
+      window.location.href = '/';
+    };
     
     // Check if the current route is part of the admin panel
     const isAdminPage = computed(() => {
       return route.path.startsWith('/admin');
     });
 
+    onMounted(() => {
+      checkUser();
+      window.addEventListener('auth-change', checkUser);
+    });
+
+    onUnmounted(() => {
+      window.removeEventListener('auth-change', checkUser);
+    });
+
     return {
       toasts,
-      isAdminPage
+      isAdminPage,
+      user,
+      handleLogout
     };
   }
 };
 </script>
+
 
 <style scoped>
 .app-layout {
@@ -316,4 +352,30 @@ export default {
     padding: 20px;
   }
 }
+
+.user-display {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-logout {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-logout:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
 </style>

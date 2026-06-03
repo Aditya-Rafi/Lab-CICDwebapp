@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 
 const dbPath = path.join(__dirname, 'db.json');
@@ -131,6 +132,33 @@ const db = {
     });
     return Object.values(customerMap);
   },
+  getUsers: () => {
+    const data = readDb();
+    return data.users || [];
+  },
+  getUserByEmail: (email) => {
+    const users = db.getUsers();
+    return users.find(u => u.email.toLowerCase() === email.toLowerCase());
+  },
+  createUser: (userData) => {
+    const data = readDb();
+    data.users = data.users || [];
+    
+    // Hash password using built-in crypto SHA-256
+    const hashedPassword = crypto.createHash('sha256').update(userData.password).digest('hex');
+    
+    const newUser = {
+      id: "usr-" + uuidv4().substring(0, 8),
+      name: userData.name || "Customer",
+      email: userData.email,
+      password: hashedPassword,
+      createdAt: new Date().toISOString()
+    };
+    
+    data.users.push(newUser);
+    writeDb(data);
+    return { id: newUser.id, name: newUser.name, email: newUser.email };
+  },
   getAnalytics: () => {
     const products = db.getProducts();
     const orders = db.getOrders();
@@ -150,14 +178,58 @@ const db = {
       stock: p.stock
     }));
     
-    const monthlySales = [
-      { month: "Jan", sales: 1200 },
-      { month: "Feb", sales: 1900 },
-      { month: "Mar", sales: 1700 },
-      { month: "Apr", sales: 2400 },
-      { month: "May", sales: 3100 },
-      { month: "Jun", sales: parseFloat(totalRevenue.toFixed(2)) }
-    ];
+    // Dynamic Monthly Sales calculation
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const salesMap = {};
+    orders.forEach(o => {
+      if (o.status !== 'Cancelled') {
+        const date = new Date(o.createdAt);
+        const m = monthNames[date.getMonth()];
+        salesMap[m] = (salesMap[m] || 0) + o.totalAmount;
+      }
+    });
+    
+    // Generate sales for the standard 6 months: Jan, Feb, Mar, Apr, May, Jun
+    const monthlySales = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"].map(m => ({
+      month: m,
+      sales: parseFloat((salesMap[m] || 0).toFixed(2))
+    }));
+
+    // Warehouse Conditions
+    const totalWarehouseStock = products.reduce((sum, p) => sum + p.stock, 0);
+    const lowStockCount = products.filter(p => p.stock > 0 && p.stock < 5).length;
+    const warehouseStatus = {
+      totalStock: totalWarehouseStock,
+      lowStockCount,
+      outOfStockCount: outOfStockProducts
+    };
+
+    // Shipping Conditions
+    const shippingStatus = {
+      pending: orders.filter(o => o.status === 'Pending').length,
+      processing: orders.filter(o => o.status === 'Processing').length,
+      shipped: orders.filter(o => o.status === 'Shipped').length,
+      delivered: orders.filter(o => o.status === 'Delivered').length,
+      cancelled: orders.filter(o => o.status === 'Cancelled').length
+    };
+
+    // Trending/Popular products calculation
+    const productQuantities = {};
+    orders.forEach(o => {
+      if (o.status !== 'Cancelled') {
+        (o.items || []).forEach(item => {
+          productQuantities[item.productId] = (productQuantities[item.productId] || 0) + item.quantity;
+        });
+      }
+    });
+
+    const trendingProducts = products.map(p => ({
+      id: p.id,
+      name: p.name,
+      sku: p.sku,
+      price: p.price,
+      orderedQuantity: productQuantities[p.id] || 0
+    })).sort((a, b) => b.orderedQuantity - a.orderedQuantity).slice(0, 5);
     
     return {
       totalRevenue: parseFloat(totalRevenue.toFixed(2)),
@@ -165,9 +237,13 @@ const db = {
       activeCustomers,
       outOfStockProducts,
       lowStockAlerts,
-      monthlySales
+      monthlySales,
+      warehouseStatus,
+      shippingStatus,
+      trendingProducts
     };
   }
+
 };
 
 module.exports = db;

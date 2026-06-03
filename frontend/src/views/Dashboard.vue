@@ -181,6 +181,80 @@
         </div>
       </div>
 
+      <!-- Warehouse & Shipping Conditions -->
+      <div class="conditions-row">
+        <!-- Warehouse Stock Condition -->
+        <div class="condition-card glass-card">
+          <h3>Warehouse Inventory Condition</h3>
+          <p class="card-subtitle">Current stock metrics in storage</p>
+          <div class="condition-metrics">
+            <div class="metric-item">
+              <span class="metric-number">{{ stats.warehouseStatus?.totalStock || 0 }}</span>
+              <span class="metric-label">Total Units in Stock</span>
+            </div>
+            <div class="metric-item">
+              <span class="metric-number text-warning">{{ stats.warehouseStatus?.lowStockCount || 0 }}</span>
+              <span class="metric-label">Low Stock Items</span>
+            </div>
+            <div class="metric-item">
+              <span class="metric-number text-danger">{{ stats.warehouseStatus?.outOfStockCount || 0 }}</span>
+              <span class="metric-label">Out of Stock Items</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shipping Status Condition -->
+        <div class="condition-card glass-card">
+          <h3>Shipping Status Tracker</h3>
+          <p class="card-subtitle">Active fulfillment pipeline stages</p>
+          <div class="shipping-grid">
+            <div class="ship-status-item">
+              <span class="status-name"><span class="status-icon">⏳</span>Pending</span>
+              <span class="badge badge-warning">{{ stats.shippingStatus?.pending || 0 }}</span>
+            </div>
+            <div class="ship-status-item">
+              <span class="status-name"><span class="status-icon">⚙️</span>Processing</span>
+              <span class="badge badge-warning">{{ stats.shippingStatus?.processing || 0 }}</span>
+            </div>
+            <div class="ship-status-item">
+              <span class="status-name"><span class="status-icon">🚚</span>Shipped</span>
+              <span class="badge badge-info">{{ stats.shippingStatus?.shipped || 0 }}</span>
+            </div>
+            <div class="ship-status-item">
+              <span class="status-name"><span class="status-icon">🎁</span>Delivered</span>
+              <span class="badge badge-success">{{ stats.shippingStatus?.delivered || 0 }}</span>
+            </div>
+            <div class="ship-status-item">
+              <span class="status-name"><span class="status-icon">❌</span>Cancelled</span>
+              <span class="badge badge-danger">{{ stats.shippingStatus?.cancelled || 0 }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Popular/Trending Products -->
+        <div class="condition-card glass-card">
+          <h3>Top Trending Products</h3>
+          <p class="card-subtitle">Best-selling items by ordered quantity</p>
+          <div v-if="!stats.trendingProducts || stats.trendingProducts.length === 0" class="alerts-empty">
+            <p>No sales data yet.</p>
+          </div>
+          <div v-else class="trending-list">
+            <div v-for="(p, index) in stats.trendingProducts" :key="p.id" class="trending-item">
+              <div class="trending-info">
+                <span class="trending-rank">#{{ index + 1 }}</span>
+                <div>
+                  <p class="trending-name">{{ p.name }}</p>
+                  <p class="trending-sku">{{ p.sku }}</p>
+                </div>
+              </div>
+              <span class="trending-qty badge badge-info">
+                {{ p.orderedQuantity }} Ordered
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- 3. Recent Transactions -->
       <section class="recent-orders glass-card">
         <div class="section-header">
@@ -244,7 +318,10 @@ export default {
       activeCustomers: 0,
       outOfStockProducts: 0,
       lowStockAlerts: [],
-      monthlySales: []
+      monthlySales: [],
+      warehouseStatus: { totalStock: 0, lowStockCount: 0, outOfStockCount: 0 },
+      shippingStatus: { pending: 0, processing: 0, shipped: 0, delivered: 0, cancelled: 0 },
+      trendingProducts: []
     });
     const recentOrders = ref([]);
 
@@ -621,4 +698,129 @@ export default {
     grid-template-columns: 1fr;
   }
 }
+
+/* Conditions Row Styles */
+.conditions-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 24px;
+}
+
+.condition-card {
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+}
+
+.condition-metrics {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  flex-grow: 1;
+  padding: 10px 0;
+}
+
+.metric-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.metric-number {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.metric-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+
+/* Shipping Grid */
+.shipping-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex-grow: 1;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.ship-status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.status-icon {
+  font-size: 16px;
+  margin-right: 8px;
+}
+
+.status-name {
+  flex-grow: 1;
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+}
+
+/* Trending List */
+.trending-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex-grow: 1;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.trending-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.trending-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 70%;
+}
+
+.trending-rank {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-accent);
+}
+
+.trending-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trending-sku {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
 </style>
