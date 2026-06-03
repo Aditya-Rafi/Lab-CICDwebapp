@@ -116,6 +116,7 @@ jobs:
 
       - name: Build & Push verified Image to GHCR
         run: |
-          docker tag beliaja-backend:ci ghcr.io/${{ github.repository }}/backend:ci
-          docker push ghcr.io/${{ github.repository }}/backend:ci
+          IMAGE_TAG=$(echo "ghcr.io/${{ github.repository }}/backend:ci" | tr '[:upper:]' '[:lower:]')
+          docker tag beliaja-backend:ci $IMAGE_TAG
+          docker push $IMAGE_TAG
 
