@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const csurf = require('csurf');
+const csrf = require('csrf');
 const db = require('./database');
 
 const app = express();
@@ -11,11 +11,19 @@ app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
 
-// Enable CSRF protection in production
+// CSRF token verification middleware using 'csrf' package
+const csrfTokens = new csrf();
+/* istanbul ignore next */
 if (process.env.NODE_ENV === 'production') {
-  app.use(csurf({ cookie: { httpOnly: true, sameSite: 'strict', secure: true } }));
   app.use((req, res, next) => {
-    res.cookie('XSRF-TOKEN', req.csrfToken());
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+      return next();
+    }
+    const token = req.headers['x-csrf-token'] || req.body._csrf;
+    const secret = req.cookies._csrfSecret;
+    if (!secret || !csrfTokens.verify(secret, token)) {
+      return res.status(403).json({ error: 'Invalid CSRF token' });
+    }
     next();
   });
 }

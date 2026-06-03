@@ -2,12 +2,15 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 COPY backend/package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Stage 2: Production runtime image
 FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
+
+# Patch all OS-level vulnerabilities
+RUN apk update && apk upgrade --no-cache && rm -rf /var/cache/apk/*
 
 # Configure security: non-root user
 RUN addgroup -g 1001 nodejs && adduser -S -u 1001 -G nodejs nodejs
