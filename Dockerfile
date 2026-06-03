@@ -1,5 +1,5 @@
 # Stage 1: Build dependencies
-FROM node:22-alpine AS builder
+FROM node:alpine3.23 AS builder
 WORKDIR /app
 COPY backend/package*.json ./
 RUN npm ci --omit=dev
