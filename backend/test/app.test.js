@@ -1,6 +1,5 @@
 const request = require('supertest');
 const app = require('../server');
-const db = require('../database');
 
 describe('E-Commerce API Endpoints', () => {
   let createdProductId = '';

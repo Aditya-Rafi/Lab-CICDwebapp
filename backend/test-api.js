@@ -1,4 +1,3 @@
-const http = require('http');
 const { spawn } = require('child_process');
 
 console.log("Starting API endpoint verification checks on Semantic Versioned (v1) routes...");
@@ -12,46 +11,27 @@ const serverProcess = spawn('node', ['backend/server.js'], {
 // Keep track of exit code
 let exitCode = 0;
 
-const makeRequest = (path, method = 'GET', body = null) => {
-  return new Promise((resolve, reject) => {
-    const dataStr = body ? JSON.stringify(body) : '';
-    const options = {
-      hostname: 'localhost',
-      port: 5000,
-      path: `/api/v1${path}`,
-      method,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    };
-    if (body) {
-      options.headers['Content-Length'] = Buffer.byteLength(dataStr);
+const makeRequest = async (path, method = 'GET', body = null) => {
+  const url = `http://localhost:5000/api/v1${path}`;
+  const options = {
+    method,
+    headers: {
+      'Content-Type': 'application/json'
     }
+  };
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
 
-    const req = http.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        try {
-          const parsed = data ? JSON.parse(data) : {};
-          resolve({ status: res.statusCode, body: parsed });
-        } catch (err) {
-          resolve({ status: res.statusCode, rawBody: data });
-        }
-      });
-    });
-
-    req.on('error', (err) => {
-      reject(err);
-    });
-
-    if (body) {
-      req.write(dataStr);
-    }
-    req.end();
-  });
+  const res = await fetch(url, options);
+  let parsed = {};
+  const text = await res.text();
+  try {
+    parsed = text ? JSON.parse(text) : {};
+  } catch (err) {
+    parsed = text;
+  }
+  return { status: res.status, body: parsed };
 };
 
 setTimeout(async () => {
@@ -61,7 +41,7 @@ setTimeout(async () => {
     // Test 1: Health endpoint
     console.log("Test 1: GET /health");
     const health = await makeRequest('/health');
-    console.log(`Status: ${health.status}, Response:`, health.body);
+    console.log("Status: ", health.status, ", Response: ", health.body);
     if (health.status !== 200 || health.body.status !== 'healthy') {
       throw new Error("Health check failed!");
     }
@@ -69,7 +49,7 @@ setTimeout(async () => {
     // Test 2: Analytics
     console.log("\nTest 2: GET /analytics");
     const analytics = await makeRequest('/analytics');
-    console.log(`Status: ${analytics.status}, Revenue: $${analytics.body.totalRevenue}`);
+    console.log("Status: ", analytics.status, ", Revenue: $", analytics.body.totalRevenue);
     if (analytics.status !== 200 || typeof analytics.body.totalRevenue !== 'number') {
       throw new Error("Analytics retrieval failed!");
     }
@@ -77,7 +57,7 @@ setTimeout(async () => {
     // Test 3: List products
     console.log("\nTest 3: GET /products");
     const products = await makeRequest('/products');
-    console.log(`Status: ${products.status}, Total Products: ${products.body.length}`);
+    console.log("Status: ", products.status, ", Total Products: ", products.body.length);
     if (products.status !== 200 || !Array.isArray(products.body)) {
       throw new Error("Get products list failed!");
     }
@@ -93,7 +73,7 @@ setTimeout(async () => {
       description: "Smart WiFi enabled LED color changing light bulb."
     };
     const createRes = await makeRequest('/products', 'POST', newProd);
-    console.log(`Status: ${createRes.status}, Created Product:`, createRes.body);
+    console.log("Status: ", createRes.status, ", Created Product: ", createRes.body);
     if (createRes.status !== 201 || !createRes.body.id) {
       throw new Error("Product creation failed!");
     }
@@ -102,7 +82,7 @@ setTimeout(async () => {
     // Test 5: Update product
     console.log("\nTest 5: PUT /products/" + createdId);
     const updateRes = await makeRequest(`/products/${createdId}`, 'PUT', { price: 24.99 });
-    console.log(`Status: ${updateRes.status}, Updated Price: $${updateRes.body.price}`);
+    console.log("Status: ", updateRes.status, ", Updated Price: $", updateRes.body.price);
     if (updateRes.status !== 200 || updateRes.body.price !== 24.99) {
       throw new Error("Product update failed!");
     }
@@ -110,7 +90,7 @@ setTimeout(async () => {
     // Test 6: Delete product
     console.log("\nTest 6: DELETE /products/" + createdId);
     const deleteRes = await makeRequest(`/products/${createdId}`, 'DELETE');
-    console.log(`Status: ${deleteRes.status}, Message:`, deleteRes.body.message);
+    console.log("Status: ", deleteRes.status, ", Message: ", deleteRes.body.message);
     if (deleteRes.status !== 200) {
       throw new Error("Product deletion failed!");
     }
