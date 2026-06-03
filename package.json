@@ -1,0 +1,15 @@
+{
+  "name": "cicd-dashboard-root-repo",
+  "version": "1.0.0",
+  "description": "Root package for CI/CD Dashboard CRUD application within Beliaja.com repo",
+  "scripts": {
+    "install-all": "npm install --prefix backend && npm install --prefix frontend",
+    "start-backend": "PORT=5000 node backend/server.js",
+    "start-frontend": "npm run dev --prefix frontend",
+    "dev": "npm run start-backend & npm run start-frontend",
+    "build": "npm run build --prefix frontend",
+    "lint": "eslint \"backend/**/*.js\"",
+    "test": "node backend/test-api.js"
+  },
+  "private": true
+}

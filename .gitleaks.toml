@@ -1,0 +1,34 @@
+# Gitleaks Configuration
+title = "Beliaja Gitleaks Config"
+
+[allowlist]
+description = "Allowlisted files and paths"
+paths = [
+  "node_modules",
+  "package-lock.json",
+  "dist"
+]
+
+[[rules]]
+description = "AWS Manager Access Key"
+id = "aws-access-key"
+regex = '''(?:A3T[A-Z0-9]|AKIA|AGPA|AIDA|AROA|AIPA|ANPA|ANVA|ASIA)[A-Z0-9]{16}'''
+tags = ["key", "AWS"]
+
+[[rules]]
+description = "AWS Secret Key"
+id = "aws-secret-key"
+regex = '''(?i)aws(.{0,20})?(?-i)['"][0-9a-zA-Z\/+]{40}['"]'''
+tags = ["key", "AWS"]
+
+[[rules]]
+description = "Generic API Key"
+id = "generic-api-key"
+regex = '''(?i)(api_key|apikey|secret|private_key|privatekey)(.{0,20})?['"][0-9a-zA-Z]{32,45}['"]'''
+tags = ["key", "API"]
+
+[[rules]]
+description = "JWT Secret Token"
+id = "jwt-secret-token"
+regex = '''(?i)(jwt_secret|jwtsecret|signing_key|signingkey)(.{0,20})?['"][0-9a-zA-Z\-_]{32,64}['"]'''
+tags = ["key", "JWT"]

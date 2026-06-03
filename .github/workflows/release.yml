@@ -1,0 +1,109 @@
+name: Release Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+  packages: write
+  security-events: write
+
+jobs:
+  release:
+    name: Build, Scan & Publish Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Extract SemVer tag names
+      - name: Extract Tag Info
+        id: tag_info
+        run: |
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "tag=${TAG_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Extract Metadata Tags for Release
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/backend
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            latest
+
+      # Build local image for security checks
+      - name: Build Local Release Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          load: true
+          tags: beliaja-backend:release
+          cache-from: type=gha
+
+      # Trivy check (CRITICAL blocks release)
+      - name: Run Trivy Security Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'beliaja-backend:release'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          exit-code: '1' # Blocks releases if critical vulnerability exists
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL'
+
+      # Upload SARIF file for GitHub Security Alerts
+      - name: Upload SARIF to GitHub Security Alerts
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      # Push verified release image to GHCR
+      - name: Build & Push Release Image to GHCR
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+
+      # Generate Changelog & GitHub Release
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ steps.tag_info.outputs.tag }}
+          tag_name: ${{ steps.tag_info.outputs.tag }}
+          generate_release_notes: true
+          body: |
+            ## Beliaja.com E-Commerce Platform Release ${{ steps.tag_info.outputs.tag }}
+            
+            Verified build is published to GitHub Container Registry (GHCR).
+            
+            ### Docker Pull Commands:
+            ```bash
+            docker pull ghcr.io/${{ github.repository }}/backend:${{ steps.tag_info.outputs.tag }}
+            docker pull ghcr.io/${{ github.repository }}/backend:latest
+            ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
