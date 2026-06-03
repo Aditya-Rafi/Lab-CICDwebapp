@@ -9,8 +9,11 @@ FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Patch all OS-level vulnerabilities and upgrade global npm to patch bundled CVEs (e.g. picomatch)
-RUN apk update && apk upgrade --no-cache && npm install -g npm@latest && rm -rf /var/cache/apk/*
+# Patch all OS-level vulnerabilities and upgrade global npm to patch bundled CVEs, then clean cache
+RUN apk update && apk upgrade --no-cache && \
+    npm install -g npm@latest && \
+    npm cache clean --force && \
+    rm -rf /root/.npm /var/cache/apk/*
 
 # Configure security: non-root user
 RUN addgroup -g 1001 nodejs && adduser -S -u 1001 -G nodejs nodejs
