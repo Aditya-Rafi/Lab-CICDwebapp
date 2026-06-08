@@ -134,8 +134,8 @@ jobs:
 
             ### Docker Pull Commands:
             ```bash
-            docker pull ghcr.io/${{ github.repository }}/backend:${{ steps.tag_info.outputs.tag }}
-            docker pull ghcr.io/${{ github.repository }}/backend:latest
+            docker pull ghcr.io/${{ steps.tag_info.outputs.lower_repo }}/backend:${{ steps.tag_info.outputs.tag }}
+            docker pull ghcr.io/${{ steps.tag_info.outputs.lower_repo }}/backend:latest
             ```
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

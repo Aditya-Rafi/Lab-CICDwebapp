@@ -147,11 +147,15 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
+      - name: Normalize repo name to lowercase
+        id: repo_lc
+        run: echo "name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
       - name: Build & Push Verified Image to GHCR
         uses: docker/build-push-action@v5
         with:
           context: .
           file: Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository }}/backend:ci
+          tags: ghcr.io/${{ steps.repo_lc.outputs.name }}/backend:ci
           cache-from: type=gha
