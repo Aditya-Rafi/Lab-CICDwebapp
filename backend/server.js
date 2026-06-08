@@ -18,7 +18,7 @@ if (!JWT_SECRET && NODE_ENV === 'production') {
   console.error('FATAL: JWT_SECRET environment variable is not set. Refusing to start.');
   process.exit(1);
 }
-const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'dev-insecure-secret-change-me-before-production';
+const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'dev-insecure-secret-change-me-before-production'; // gitleaks:allow
 
 // --- Security middleware ---
 app.use(helmet());
