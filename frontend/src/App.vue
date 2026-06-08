@@ -65,6 +65,7 @@
             <router-link to="/" class="header-nav-item" active-class="active">Storefront</router-link>
             
             <template v-if="user">
+              <router-link to="/dashboard" class="header-nav-item" active-class="active">Dashboard</router-link>
               <router-link to="/my-orders" class="header-nav-item" active-class="active">My Orders</router-link>
               <span class="user-display">👤 {{ user.name }}</span>
               <button class="btn-logout" @click="handleLogout">Logout</button>
@@ -89,13 +90,14 @@
 
 <script>
 import { computed, ref, onMounted, onUnmounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { toasts } from './toast';
 
 export default {
   name: 'App',
   setup() {
     const route = useRoute();
+    const router = useRouter();
     const user = ref(null);
 
     const checkUser = () => {
@@ -106,8 +108,7 @@ export default {
       localStorage.removeItem('user');
       checkUser();
       window.dispatchEvent(new Event('auth-change'));
-      // Redirect to home storefront
-      window.location.href = '/';
+      router.push('/');
     };
     
     // Check if the current route is part of the admin panel

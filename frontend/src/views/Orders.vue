@@ -171,6 +171,7 @@
 <script>
 import { ref, computed, onMounted } from 'vue';
 import { showToast } from '../toast';
+import { apiGet, apiPut } from '../api';
 
 export default {
   name: 'Orders',
@@ -187,7 +188,7 @@ export default {
     const fetchOrders = async () => {
       loading.value = true;
       try {
-        const res = await fetch('/api/v1/orders');
+        const res = await apiGet('/api/v1/orders');
         if (res.ok) {
           orders.value = await res.json();
         } else {
@@ -247,13 +248,7 @@ export default {
 
     const updateStatus = async (orderId, newStatus) => {
       try {
-        const res = await fetch(`/api/v1/orders/${orderId}/status`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ status: newStatus })
-        });
+        const res = await apiPut(`/api/v1/orders/${orderId}/status`, { status: newStatus });
         
         if (res.ok) {
           showToast(`Order status updated to ${newStatus}`, 'success');

@@ -83,7 +83,7 @@ export default {
           }));
           window.dispatchEvent(new Event('auth-change'));
           showToast(`Welcome back, ${data.name}!`, 'success');
-          router.push('/');
+          router.push('/dashboard');
         } else {
           showToast(data.error || 'Invalid credentials', 'error');
         }

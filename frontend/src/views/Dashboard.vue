@@ -186,17 +186,17 @@
         <!-- Warehouse Stock Condition -->
         <div class="condition-card glass-card">
           <h3>Warehouse Inventory Condition</h3>
-          <p class="card-subtitle">Current stock metrics in storage</p>
+          <p class="card-subtitle">Current stock metrics in storage (Click to view details)</p>
           <div class="condition-metrics">
-            <div class="metric-item">
+            <div class="metric-item clickable" @click="openWarehouseModal('all')">
               <span class="metric-number">{{ stats.warehouseStatus?.totalStock || 0 }}</span>
               <span class="metric-label">Total Units in Stock</span>
             </div>
-            <div class="metric-item">
+            <div class="metric-item clickable" @click="openWarehouseModal('low')">
               <span class="metric-number text-warning">{{ stats.warehouseStatus?.lowStockCount || 0 }}</span>
               <span class="metric-label">Low Stock Items</span>
             </div>
-            <div class="metric-item">
+            <div class="metric-item clickable" @click="openWarehouseModal('out')">
               <span class="metric-number text-danger">{{ stats.warehouseStatus?.outOfStockCount || 0 }}</span>
               <span class="metric-label">Out of Stock Items</span>
             </div>
@@ -206,25 +206,25 @@
         <!-- Shipping Status Condition -->
         <div class="condition-card glass-card">
           <h3>Shipping Status Tracker</h3>
-          <p class="card-subtitle">Active fulfillment pipeline stages</p>
+          <p class="card-subtitle">Active fulfillment pipeline stages (Click to view details)</p>
           <div class="shipping-grid">
-            <div class="ship-status-item">
+            <div class="ship-status-item clickable" @click="openShippingModal('Pending')">
               <span class="status-name"><span class="status-icon">⏳</span>Pending</span>
               <span class="badge badge-warning">{{ stats.shippingStatus?.pending || 0 }}</span>
             </div>
-            <div class="ship-status-item">
+            <div class="ship-status-item clickable" @click="openShippingModal('Processing')">
               <span class="status-name"><span class="status-icon">⚙️</span>Processing</span>
               <span class="badge badge-warning">{{ stats.shippingStatus?.processing || 0 }}</span>
             </div>
-            <div class="ship-status-item">
+            <div class="ship-status-item clickable" @click="openShippingModal('Shipped')">
               <span class="status-name"><span class="status-icon">🚚</span>Shipped</span>
               <span class="badge badge-info">{{ stats.shippingStatus?.shipped || 0 }}</span>
             </div>
-            <div class="ship-status-item">
+            <div class="ship-status-item clickable" @click="openShippingModal('Delivered')">
               <span class="status-name"><span class="status-icon">🎁</span>Delivered</span>
               <span class="badge badge-success">{{ stats.shippingStatus?.delivered || 0 }}</span>
             </div>
-            <div class="ship-status-item">
+            <div class="ship-status-item clickable" @click="openShippingModal('Cancelled')">
               <span class="status-name"><span class="status-icon">❌</span>Cancelled</span>
               <span class="badge badge-danger">{{ stats.shippingStatus?.cancelled || 0 }}</span>
             </div>
@@ -301,11 +301,102 @@
         </div>
       </section>
     </div>
+
+    <!-- Warehouse Inventory Detail Modal -->
+    <div v-if="showWarehouseModal" class="modal-overlay" @click.self="showWarehouseModal = false">
+      <div class="modal-content glass-card">
+        <div class="modal-header">
+          <h3>{{ warehouseModalTitle }}</h3>
+          <button class="close-modal-btn" @click="showWarehouseModal = false">✕</button>
+        </div>
+
+        <div class="modal-body-content">
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Product Name</th>
+                  <th>SKU</th>
+                  <th>Category</th>
+                  <th>Price</th>
+                  <th>Stock</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="prod in modalProducts" :key="prod.id">
+                  <td>{{ prod.name }}</td>
+                  <td><code>{{ prod.sku }}</code></td>
+                  <td>{{ prod.category }}</td>
+                  <td>${{ prod.price.toFixed(2) }}</td>
+                  <td>
+                    <span :class="['badge', getStockBadgeClass(prod.stock)]">
+                      {{ prod.stock }} units
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="showWarehouseModal = false">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Shipping Tracker Detail Modal -->
+    <div v-if="showShippingModal" class="modal-overlay" @click.self="showShippingModal = false">
+      <div class="modal-content glass-card">
+        <div class="modal-header">
+          <h3>{{ shippingModalTitle }}</h3>
+          <button class="close-modal-btn" @click="showShippingModal = false">✕</button>
+        </div>
+
+        <div class="modal-body-content">
+          <div v-if="modalOrders.length === 0" class="empty-table">
+            <p>No orders in this stage.</p>
+          </div>
+          <div v-else class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Order Number</th>
+                  <th>Customer</th>
+                  <th>Items</th>
+                  <th>Total Amount</th>
+                  <th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="order in modalOrders" :key="order.id">
+                  <td><code>{{ order.orderNumber }}</code></td>
+                  <td>
+                    <div class="customer-info">
+                      <p class="cust-name">{{ order.customerName }}</p>
+                      <p class="cust-email">{{ order.customerEmail }}</p>
+                    </div>
+                  </td>
+                  <td>{{ getItemsCount(order) }} items</td>
+                  <td class="amount-cell">${{ order.totalAmount.toFixed(2) }}</td>
+                  <td>{{ formatDate(order.createdAt) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="showShippingModal = false">Close</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { ref, computed, onMounted } from 'vue';
+import { apiGet } from '../api';
 import { showToast } from '../toast';
 
 export default {
@@ -324,24 +415,38 @@ export default {
       trendingProducts: []
     });
     const recentOrders = ref([]);
+    
+    // Interactive modal state variables
+    const products = ref([]);
+    const allOrders = ref([]);
+    const showWarehouseModal = ref(false);
+    const warehouseModalType = ref('all');
+    const showShippingModal = ref(false);
+    const shippingModalType = ref('Pending');
 
     const fetchAnalytics = async () => {
       loading.value = true;
       try {
-        const statsRes = await fetch('/api/v1/analytics');
+        const statsRes = await apiGet('/api/v1/analytics');
         if (statsRes.ok) {
           stats.value = await statsRes.json();
         } else {
           showToast('Failed to load dashboard metrics', 'error');
         }
 
-        const ordersRes = await fetch('/api/v1/orders');
+        const ordersRes = await apiGet('/api/v1/orders');
         if (ordersRes.ok) {
-          const allOrders = await ordersRes.json();
+          const fetchedOrders = await ordersRes.json();
+          allOrders.value = fetchedOrders;
           // Sort descending by date, slice top 5
-          recentOrders.value = allOrders
+          recentOrders.value = [...fetchedOrders]
             .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
             .slice(0, 5);
+        }
+
+        const prodRes = await fetch('/api/v1/products');
+        if (prodRes.ok) {
+          products.value = await prodRes.json();
         }
       } catch (err) {
         showToast('Network error loading admin telemetry', 'error');
@@ -419,6 +524,52 @@ export default {
       });
     };
 
+    // Computed filters for detailed modals
+    const warehouseModalTitle = computed(() => {
+      switch (warehouseModalType.value) {
+        case 'low': return 'Warehouse Inventory: Low Stock Items (< 5 units)';
+        case 'out': return 'Warehouse Inventory: Out of Stock Items';
+        default: return 'Warehouse Inventory: All Products';
+      }
+    });
+
+    const modalProducts = computed(() => {
+      switch (warehouseModalType.value) {
+        case 'low': return products.value.filter(p => p.stock > 0 && p.stock < 5);
+        case 'out': return products.value.filter(p => p.stock <= 0);
+        default: return products.value;
+      }
+    });
+
+    const shippingModalTitle = computed(() => {
+      return `Fulfillment Pipeline: ${shippingModalType.value} Orders`;
+    });
+
+    const modalOrders = computed(() => {
+      return allOrders.value.filter(o => o.status === shippingModalType.value);
+    });
+
+    const getStockBadgeClass = (stock) => {
+      if (stock <= 0) return 'badge-danger';
+      if (stock < 5) return 'badge-warning';
+      return 'badge-success';
+    };
+
+    const getItemsCount = (order) => {
+      if (!order.items) return 0;
+      return order.items.reduce((sum, item) => sum + item.quantity, 0);
+    };
+
+    const openWarehouseModal = (type) => {
+      warehouseModalType.value = type;
+      showWarehouseModal.value = true;
+    };
+
+    const openShippingModal = (status) => {
+      shippingModalType.value = status;
+      showShippingModal.value = true;
+    };
+
     return {
       loading,
       stats,
@@ -428,7 +579,19 @@ export default {
       chartAreaPath,
       fetchAnalytics,
       getStatusBadge,
-      formatDate
+      formatDate,
+      
+      // Detailed interactive modals
+      showWarehouseModal,
+      showShippingModal,
+      warehouseModalTitle,
+      modalProducts,
+      shippingModalTitle,
+      modalOrders,
+      getStockBadgeClass,
+      getItemsCount,
+      openWarehouseModal,
+      openShippingModal
     };
   }
 };
@@ -823,4 +986,83 @@ export default {
   margin-top: 2px;
 }
 
+/* Clickable Interactive Pointer Indicators */
+.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clickable:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  transform: translateY(-2px);
+  border-color: var(--color-primary) !important;
+}
+
+/* Modals layout */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modal-content {
+  max-width: 750px;
+  width: 100%;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 90vh;
+  animation: modalIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.close-modal-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+}
+
+.close-modal-btn:hover {
+  color: var(--text-primary);
+}
+
+.modal-body-content {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+}
+
+@keyframes modalIn {
+  from { transform: translateY(30px) scale(0.95); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
 </style>

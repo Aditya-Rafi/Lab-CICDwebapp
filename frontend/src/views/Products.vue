@@ -113,6 +113,7 @@
 <script>
 import { ref, computed, onMounted } from 'vue';
 import { showToast } from '../toast';
+import { apiDelete } from '../api';
 
 export default {
   name: 'Products',
@@ -170,9 +171,7 @@ export default {
     const deleteProduct = async () => {
       if (!productToDelete.value) return;
       try {
-        const res = await fetch(`/api/v1/products/${productToDelete.value.id}`, {
-          method: 'DELETE'
-        });
+        const res = await apiDelete(`/api/v1/products/${productToDelete.value.id}`);
         if (res.ok) {
           showToast(`${productToDelete.value.name} deleted successfully`, 'success');
           products.value = products.value.filter(p => p.id !== productToDelete.value.id);

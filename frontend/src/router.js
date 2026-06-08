@@ -15,33 +15,39 @@ const routes = [
   {
     path: '/admin',
     name: 'Dashboard',
-    component: Dashboard
+    component: Dashboard,
+    meta: { requiresAuth: true }
   },
   {
     path: '/admin/products',
     name: 'Products',
-    component: Products
+    component: Products,
+    meta: { requiresAuth: true }
   },
   {
     path: '/admin/products/new',
     name: 'CreateProduct',
-    component: ProductForm
+    component: ProductForm,
+    meta: { requiresAuth: true }
   },
   {
     path: '/admin/products/edit/:id',
     name: 'EditProduct',
     component: ProductForm,
-    props: true
+    props: true,
+    meta: { requiresAuth: true }
   },
   {
     path: '/admin/orders',
     name: 'Orders',
-    component: Orders
+    component: Orders,
+    meta: { requiresAuth: true }
   },
   {
     path: '/admin/system',
     name: 'SystemInfo',
-    component: SystemInfo
+    component: SystemInfo,
+    meta: { requiresAuth: true }
   },
   {
     path: '/login',
@@ -57,6 +63,12 @@ const routes = [
     path: '/my-orders',
     name: 'MyOrders',
     component: () => import('./views/MyOrders.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/dashboard',
+    name: 'CustomerDashboard',
+    component: () => import('./views/CustomerDashboard.vue'),
     meta: { requiresAuth: true }
   }
 ];

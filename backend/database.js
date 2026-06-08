@@ -1,14 +1,14 @@
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 
 const dbPath = path.join(__dirname, 'db.json');
 
-// Default database fallback
 const defaultDb = {
   products: [],
-  orders: []
+  orders: [],
+  users: [],
+  orderCounter: 1000
 };
 
 function readDb() {
@@ -62,7 +62,7 @@ const db = {
     const data = readDb();
     const index = data.products.findIndex(p => p.id === id);
     if (index === -1) return null;
-    
+
     data.products[index] = {
       ...data.products[index],
       name: productData.name !== undefined ? productData.name : data.products[index].name,
@@ -89,9 +89,11 @@ const db = {
   },
   createOrder: (orderData) => {
     const data = readDb();
+    // Use a persistent counter to avoid duplicate order numbers on deletion
+    data.orderCounter = (data.orderCounter || 1000) + 1;
     const newOrder = {
       id: "ord-" + uuidv4().substring(0, 8),
-      orderNumber: "BELI-" + (1000 + (data.orders || []).length + 1),
+      orderNumber: "BELI-" + data.orderCounter,
       customerName: orderData.customerName || "Customer Name",
       customerEmail: orderData.customerEmail || "customer@example.com",
       items: orderData.items || [],
@@ -140,21 +142,17 @@ const db = {
     const users = db.getUsers();
     return users.find(u => u.email.toLowerCase() === email.toLowerCase());
   },
+  // Password hashing is done in server.js using bcrypt before calling this
   createUser: (userData) => {
     const data = readDb();
     data.users = data.users || [];
-    
-    // Hash password using built-in crypto SHA-256
-    const hashedPassword = crypto.createHash('sha256').update(userData.password).digest('hex');
-    
     const newUser = {
       id: "usr-" + uuidv4().substring(0, 8),
       name: userData.name || "Customer",
-      email: userData.email,
-      password: hashedPassword,
+      email: userData.email.toLowerCase(),
+      password: userData.hashedPassword,
       createdAt: new Date().toISOString()
     };
-    
     data.users.push(newUser);
     writeDb(data);
     return { id: newUser.id, name: newUser.name, email: newUser.email };
@@ -162,14 +160,14 @@ const db = {
   getAnalytics: () => {
     const products = db.getProducts();
     const orders = db.getOrders();
-    
+
     let totalRevenue = 0;
     orders.forEach(o => {
       if (o.status !== 'Cancelled') {
         totalRevenue += o.totalAmount;
       }
     });
-    
+
     const activeCustomers = new Set(orders.map(o => o.customerEmail)).size;
     const outOfStockProducts = products.filter(p => p.stock <= 0).length;
     const lowStockAlerts = products.filter(p => p.stock > 0 && p.stock < 5).map(p => ({
@@ -177,8 +175,7 @@ const db = {
       name: p.name,
       stock: p.stock
     }));
-    
-    // Dynamic Monthly Sales calculation
+
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const salesMap = {};
     orders.forEach(o => {
@@ -188,14 +185,12 @@ const db = {
         salesMap[m] = (salesMap[m] || 0) + o.totalAmount;
       }
     });
-    
-    // Generate sales for the standard 6 months: Jan, Feb, Mar, Apr, May, Jun
+
     const monthlySales = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"].map(m => ({
       month: m,
       sales: parseFloat((salesMap[m] || 0).toFixed(2))
     }));
 
-    // Warehouse Conditions
     const totalWarehouseStock = products.reduce((sum, p) => sum + p.stock, 0);
     const lowStockCount = products.filter(p => p.stock > 0 && p.stock < 5).length;
     const warehouseStatus = {
@@ -204,7 +199,6 @@ const db = {
       outOfStockCount: outOfStockProducts
     };
 
-    // Shipping Conditions
     const shippingStatus = {
       pending: orders.filter(o => o.status === 'Pending').length,
       processing: orders.filter(o => o.status === 'Processing').length,
@@ -213,7 +207,6 @@ const db = {
       cancelled: orders.filter(o => o.status === 'Cancelled').length
     };
 
-    // Trending/Popular products calculation
     const productQuantities = {};
     orders.forEach(o => {
       if (o.status !== 'Cancelled') {
@@ -230,7 +223,7 @@ const db = {
       price: p.price,
       orderedQuantity: productQuantities[p.id] || 0
     })).sort((a, b) => b.orderedQuantity - a.orderedQuantity).slice(0, 5);
-    
+
     return {
       totalRevenue: parseFloat(totalRevenue.toFixed(2)),
       totalOrders: orders.length,
@@ -243,7 +236,6 @@ const db = {
       trendingProducts
     };
   }
-
 };
 
 module.exports = db;

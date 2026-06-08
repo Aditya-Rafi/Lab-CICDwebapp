@@ -11,9 +11,42 @@ permissions:
   security-events: write
 
 jobs:
+  test:
+    name: Pre-Release Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Cache Node Modules
+        uses: actions/cache@v4
+        id: npm-cache
+        with:
+          path: |
+            backend/node_modules
+            ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('backend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install Backend Packages
+        if: steps.npm-cache.outputs.cache-hit != 'true'
+        run: npm ci --prefix backend
+
+      - name: Execute API Integration Tests
+        run: npm test --prefix backend
+        env:
+          NODE_ENV: test
+
   release:
     name: Build, Scan & Publish Release
     runs-on: ubuntu-latest
+    needs: test
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -27,41 +60,47 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       # Extract SemVer tag names
       - name: Extract Tag Info
         id: tag_info
         run: |
           TAG_NAME=${GITHUB_REF#refs/tags/}
           echo "tag=${TAG_NAME}" >> $GITHUB_OUTPUT
-          # Convert repository name to lowercase for docker compatibility
           LOWER_REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "lower_repo=${LOWER_REPO}" >> $GITHUB_OUTPUT
 
-      # Build local image for security checks
       - name: Build Local Release Image
-        run: |
-          docker build -t beliaja-backend:release .
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          load: true
+          tags: beliaja-backend:release
+          cache-from: type=gha
 
-      # Trivy check (CRITICAL blocks release)
+      # Pinned to specific version — CRITICAL blocks release
       - name: Run Trivy Security Scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@0.28.0
         with:
           image-ref: 'beliaja-backend:release'
           format: 'sarif'
           output: 'trivy-results.sarif'
-          exit-code: '1' # Blocks releases if critical vulnerability exists
+          exit-code: '1'
           ignore-unfixed: true
           vuln-type: 'os,library'
-          severity: 'CRITICAL'
+          # Release uses same severity as CI — consistent gate
+          severity: 'CRITICAL,HIGH'
 
-      # Upload SARIF file for GitHub Security Alerts
       - name: Upload SARIF to GitHub Security Alerts
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
           sarif_file: 'trivy-results.sarif'
 
-      # Push verified release image to GHCR
+      # Push verified release image with full semantic version tag set
       - name: Build & Push Release Image to GHCR
         run: |
           TAG="${{ steps.tag_info.outputs.tag }}"
@@ -69,20 +108,19 @@ jobs:
           VER="${TAG#v}"
           MAJOR=$(echo "$VER" | cut -d. -f1)
           MINOR=$(echo "$VER" | cut -d. -f2)
-          
+
           docker tag beliaja-backend:release "ghcr.io/${REPO}/backend:${TAG}"
           docker tag beliaja-backend:release "ghcr.io/${REPO}/backend:${VER}"
           docker tag beliaja-backend:release "ghcr.io/${REPO}/backend:${MAJOR}.${MINOR}"
           docker tag beliaja-backend:release "ghcr.io/${REPO}/backend:${MAJOR}"
           docker tag beliaja-backend:release "ghcr.io/${REPO}/backend:latest"
-          
+
           docker push "ghcr.io/${REPO}/backend:${TAG}"
           docker push "ghcr.io/${REPO}/backend:${VER}"
           docker push "ghcr.io/${REPO}/backend:${MAJOR}.${MINOR}"
           docker push "ghcr.io/${REPO}/backend:${MAJOR}"
           docker push "ghcr.io/${REPO}/backend:latest"
 
-      # Generate Changelog & GitHub Release
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -91,9 +129,9 @@ jobs:
           generate_release_notes: true
           body: |
             ## Beliaja.com E-Commerce Platform Release ${{ steps.tag_info.outputs.tag }}
-            
-            Verified build is published to GitHub Container Registry (GHCR).
-            
+
+            Verified build published to GitHub Container Registry (GHCR).
+
             ### Docker Pull Commands:
             ```bash
             docker pull ghcr.io/${{ github.repository }}/backend:${{ steps.tag_info.outputs.tag }}

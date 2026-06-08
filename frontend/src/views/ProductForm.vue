@@ -148,6 +148,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { showToast } from '../toast';
+import { apiPost, apiPut } from '../api';
 
 export default {
   name: 'ProductForm',
@@ -240,16 +241,9 @@ export default {
           imageUrl: computedImageUrl.value
         };
 
-        const url = isEdit.value ? `/api/v1/products/${props.id}` : '/api/v1/products';
-        const method = isEdit.value ? 'PUT' : 'POST';
-
-        const res = await fetch(url, {
-          method,
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
+        const res = isEdit.value
+          ? await apiPut(`/api/v1/products/${props.id}`, payload)
+          : await apiPost('/api/v1/products', payload);
 
         if (res.ok) {
           showToast(

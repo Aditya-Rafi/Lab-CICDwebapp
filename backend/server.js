@@ -2,23 +2,47 @@ const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
 const csrf = require('csrf');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 const db = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRES_IN = '8h';
 
-app.use(cors());
-app.use(express.json());
+if (!JWT_SECRET && NODE_ENV === 'production') {
+  console.error('FATAL: JWT_SECRET environment variable is not set. Refusing to start.');
+  process.exit(1);
+}
+const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'dev-insecure-secret-change-me-before-production';
+
+// --- Security middleware ---
+app.use(helmet());
 app.use(cookieParser());
+app.use(express.json({ limit: '1mb' }));
 
-// CSRF token verification middleware using 'csrf' package
+// CORS: restrict origins via ALLOWED_ORIGINS env var in production
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : ['http://localhost:3000', 'http://localhost:5000'];
+
+app.use(cors({
+  origin: ALLOWED_ORIGINS,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
+  credentials: true
+}));
+
+// CSRF protection (production only — dev SPA uses JWT Bearer token)
 const csrfTokens = new csrf();
 /* istanbul ignore next */
-if (process.env.NODE_ENV === 'production') {
+if (NODE_ENV === 'production') {
   app.use((req, res, next) => {
-    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-      return next();
-    }
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
     const token = req.headers['x-csrf-token'] || req.body._csrf;
     const secret = req.cookies._csrfSecret;
     if (!secret || !csrfTokens.verify(secret, token)) {
@@ -28,11 +52,44 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// API Version: Semantic Versioning of the API
+// --- Rate limiters ---
+// Stricter limit on auth endpoints to mitigate brute-force attacks
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: NODE_ENV === 'test' ? 1000 : 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Please try again in 15 minutes.' }
+});
+
+// General API rate limit
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: NODE_ENV === 'test' ? 10000 : 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit exceeded. Please slow down.' }
+});
+
+app.use(generalLimiter);
+
+// --- JWT authentication middleware ---
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
+  if (!token) return res.status(401).json({ error: 'Authentication required' });
+  try {
+    req.user = jwt.verify(token, EFFECTIVE_JWT_SECRET);
+    next();
+  } catch {
+    return res.status(403).json({ error: 'Invalid or expired token' });
+  }
+};
+
 const API_VERSION = 'v1';
 const BASE_PATH = `/api/${API_VERSION}`;
 
-// 0. System Meta Check
+// --- Health endpoints (public) ---
 app.get(`${BASE_PATH}/health`, (req, res) => {
   res.json({
     status: 'healthy',
@@ -42,80 +99,83 @@ app.get(`${BASE_PATH}/health`, (req, res) => {
   });
 });
 
-// Native Node health check endpoint (Kubernetes-friendly)
+// Kubernetes-friendly health check
 app.get('/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-// 1. ANALYTICS ENDPOINTS
-app.get(`${BASE_PATH}/analytics`, (req, res) => {
+// --- Analytics (protected) ---
+app.get(`${BASE_PATH}/analytics`, authenticateToken, (req, res) => {
   res.json(db.getAnalytics());
 });
 
-// 2. PRODUCTS ENDPOINTS (CRUD)
+// --- Products (GET public, writes protected) ---
 app.get(`${BASE_PATH}/products`, (req, res) => {
-  const products = db.getProducts();
-  res.json(products);
+  res.json(db.getProducts());
 });
 
 app.get(`${BASE_PATH}/products/:id`, (req, res) => {
   const prod = db.getProductById(req.params.id);
-  if (prod) {
-    res.json(prod);
-  } else {
-    res.status(404).json({ error: 'Product not found' });
-  }
+  if (prod) return res.json(prod);
+  res.status(404).json({ error: 'Product not found' });
 });
 
-app.post(`${BASE_PATH}/products`, (req, res) => {
+app.post(`${BASE_PATH}/products`, authenticateToken, (req, res) => {
   const { name, sku, price, stock, category } = req.body;
   if (!name || !sku || price === undefined || stock === undefined || !category) {
     return res.status(400).json({ error: 'Missing required fields (name, sku, price, stock, category)' });
   }
-  const newProduct = db.createProduct(req.body);
-  res.status(201).json(newProduct);
+  res.status(201).json(db.createProduct(req.body));
 });
 
-app.put(`${BASE_PATH}/products/:id`, (req, res) => {
+app.put(`${BASE_PATH}/products/:id`, authenticateToken, (req, res) => {
   const prod = db.getProductById(req.params.id);
-  if (!prod) {
-    return res.status(404).json({ error: 'Product not found' });
-  }
-  
-  const updatedProduct = db.updateProduct(req.params.id, req.body);
-  res.json(updatedProduct);
+  if (!prod) return res.status(404).json({ error: 'Product not found' });
+  res.json(db.updateProduct(req.params.id, req.body));
 });
 
-app.delete(`${BASE_PATH}/products/:id`, (req, res) => {
+app.delete(`${BASE_PATH}/products/:id`, authenticateToken, (req, res) => {
   const prod = db.getProductById(req.params.id);
-  if (!prod) {
-    return res.status(404).json({ error: 'Product not found' });
-  }
+  if (!prod) return res.status(404).json({ error: 'Product not found' });
   const success = db.deleteProduct(req.params.id);
-  if (success) {
-    res.json({ message: 'Product deleted successfully' });
-  } else {
-    res.status(500).json({ error: 'Failed to delete product' });
-  }
+  if (success) return res.json({ message: 'Product deleted successfully' });
+  res.status(500).json({ error: 'Failed to delete product' });
 });
 
-// 3. ORDERS ENDPOINTS
-app.get(`${BASE_PATH}/orders`, (req, res) => {
+// --- Orders (all protected) ---
+// NOTE: /orders/customer must be defined before /orders/:id routes to avoid param capture
+app.get(`${BASE_PATH}/orders/customer`, authenticateToken, (req, res) => {
+  const { email } = req.query;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+  // Users may only query their own orders
+  if (req.user.email.toLowerCase() !== email.toLowerCase()) {
+    return res.status(403).json({ error: 'Access denied: you may only view your own orders' });
+  }
+  const orders = db.getOrders().filter(o => o.customerEmail.toLowerCase() === email.toLowerCase());
+  res.json(orders);
+});
+
+app.get(`${BASE_PATH}/orders`, authenticateToken, (req, res) => {
   res.json(db.getOrders());
 });
 
-app.post(`${BASE_PATH}/orders`, (req, res) => {
-  const { customerName, customerEmail, items, totalAmount } = req.body;
-  if (!customerName || !customerEmail || !items || !items.length || totalAmount === undefined) {
+app.post(`${BASE_PATH}/orders`, authenticateToken, (req, res) => {
+  const { customerName, customerEmail, items } = req.body;
+  if (!customerName || !customerEmail || !items || !items.length) {
     return res.status(400).json({ error: 'Missing order parameters' });
   }
-  // Deduct product stock
+
+  // Server-side stock check and total calculation (do not trust client-sent totalAmount)
   const products = db.getProducts();
   let stockError = false;
+  let serverTotal = 0;
+
   items.forEach(item => {
     const prod = products.find(p => p.id === item.productId);
     if (!prod || prod.stock < item.quantity) {
       stockError = true;
+    } else {
+      serverTotal += prod.price * item.quantity;
     }
   });
 
@@ -123,49 +183,51 @@ app.post(`${BASE_PATH}/orders`, (req, res) => {
     return res.status(400).json({ error: 'One or more items are out of stock' });
   }
 
-  // Deduct stocks
+  // Apply 5% tax server-side
+  serverTotal = parseFloat((serverTotal * 1.05).toFixed(2));
+
   items.forEach(item => {
     const prod = products.find(p => p.id === item.productId);
     db.updateProduct(item.productId, { stock: prod.stock - item.quantity });
   });
 
-  const newOrder = db.createOrder(req.body);
-  res.status(201).json(newOrder);
+  res.status(201).json(db.createOrder({ ...req.body, totalAmount: serverTotal }));
 });
 
-app.put(`${BASE_PATH}/orders/:id/status`, (req, res) => {
+app.put(`${BASE_PATH}/orders/:id/status`, authenticateToken, (req, res) => {
   const { status } = req.body;
-  if (!status) {
-    return res.status(400).json({ error: 'Status is required' });
+  const validStatuses = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+  if (!status || !validStatuses.includes(status)) {
+    return res.status(400).json({ error: `Status must be one of: ${validStatuses.join(', ')}` });
   }
-  const updatedOrder = db.updateOrderStatus(req.params.id, status);
-  if (updatedOrder) {
-    res.json(updatedOrder);
-  } else {
-    res.status(404).json({ error: 'Order not found' });
-  }
+  const updated = db.updateOrderStatus(req.params.id, status);
+  if (updated) return res.json(updated);
+  res.status(404).json({ error: 'Order not found' });
 });
 
-// 4. CUSTOMERS ENDPOINTS
-app.get(`${BASE_PATH}/customers`, (req, res) => {
+// --- Customers (protected) ---
+app.get(`${BASE_PATH}/customers`, authenticateToken, (req, res) => {
   res.json(db.getCustomers());
 });
 
-// 5. AUTH ENDPOINTS
-app.post(`${BASE_PATH}/auth/register`, (req, res) => {
+// --- Auth endpoints (rate limited) ---
+app.post(`${BASE_PATH}/auth/register`, authLimiter, async (req, res) => {
   const { name, email, password } = req.body;
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Missing name, email, or password' });
   }
-  const existingUser = db.getUserByEmail(email);
-  if (existingUser) {
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  }
+  if (db.getUserByEmail(email)) {
     return res.status(400).json({ error: 'Email already registered' });
   }
-  const newUser = db.createUser({ name, email, password });
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const newUser = db.createUser({ name, email, hashedPassword });
   res.status(201).json(newUser);
 });
 
-app.post(`${BASE_PATH}/auth/login`, (req, res) => {
+app.post(`${BASE_PATH}/auth/login`, authLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Missing email or password' });
@@ -174,32 +236,19 @@ app.post(`${BASE_PATH}/auth/login`, (req, res) => {
   if (!user) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
-  const crypto = require('crypto');
-  const hashedPassword = crypto.createHash('sha256').update(password).digest('hex');
-  if (user.password !== hashedPassword) {
+  const isValid = await bcrypt.compare(password, user.password);
+  if (!isValid) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
-  res.json({
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    token: 'simulated-token-' + user.id
-  });
+  const token = jwt.sign(
+    { id: user.id, email: user.email, name: user.name },
+    EFFECTIVE_JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+  res.json({ id: user.id, name: user.name, email: user.email, token });
 });
 
-// 6. CUSTOMER ORDERS ENDPOINT
-app.get(`${BASE_PATH}/orders/customer`, (req, res) => {
-  const { email } = req.query;
-  if (!email) {
-    return res.status(400).json({ error: 'Email is required' });
-  }
-  const orders = db.getOrders();
-  const customerOrders = orders.filter(o => o.customerEmail.toLowerCase() === email.toLowerCase());
-  res.json(customerOrders);
-});
-
-
-// Start listening if run directly
+/* istanbul ignore next */
 if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`Express server running on port ${PORT} (API Version: ${API_VERSION})`);

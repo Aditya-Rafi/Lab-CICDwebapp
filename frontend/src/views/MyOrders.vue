@@ -43,7 +43,7 @@
             </div>
           </div>
           <span :class="['badge', getStatusBadgeClass(order.status)]">
-            {{ order.status }}
+            {{ translateStatus(order.status) }}
           </span>
         </div>
 
@@ -91,6 +91,7 @@
 <script>
 import { ref, onMounted } from 'vue';
 import { showToast } from '../toast';
+import { apiGet } from '../api';
 
 export default {
   name: 'MyOrders',
@@ -100,17 +101,17 @@ export default {
     const user = JSON.parse(localStorage.getItem('user'));
 
     const steps = [
-      { name: 'Pending', label: 'Pending', icon: '📝' },
-      { name: 'Processing', label: 'Processing', icon: '⚙️' },
-      { name: 'Shipped', label: 'Shipped', icon: '🚚' },
-      { name: 'Delivered', label: 'Delivered', icon: '🎁' }
+      { name: 'Pending', label: 'Menunggu', icon: '📝' },
+      { name: 'Processing', label: 'Dipacking', icon: '📦' },
+      { name: 'Shipped', label: 'Dikirim', icon: '🚚' },
+      { name: 'Delivered', label: 'Sampai', icon: '🎁' }
     ];
 
     const fetchOrders = async () => {
       if (!user) return;
       loading.value = true;
       try {
-        const res = await fetch(`/api/v1/orders/customer?email=${encodeURIComponent(user.email)}`);
+        const res = await apiGet(`/api/v1/orders/customer?email=${encodeURIComponent(user.email)}`);
         if (res.ok) {
           const data = await res.json();
           // Sort descending by date
@@ -161,6 +162,17 @@ export default {
       return '';
     };
 
+    const translateStatus = (status) => {
+      switch (status) {
+        case 'Pending': return 'Menunggu Pembayaran';
+        case 'Processing': return 'Dipacking';
+        case 'Shipped': return 'Dikirim';
+        case 'Delivered': return 'Sampai';
+        case 'Cancelled': return 'Dibatalkan';
+        default: return status;
+      }
+    };
+
     const formatDate = (dateStr) => {
       const date = new Date(dateStr);
       return date.toLocaleDateString('en-US', {
@@ -180,7 +192,8 @@ export default {
       getStatusBadgeClass,
       getTimelineProgress,
       getStepClass,
-      formatDate
+      formatDate,
+      translateStatus
     };
   }
 };

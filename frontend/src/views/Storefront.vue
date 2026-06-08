@@ -127,6 +127,9 @@
           <!-- Checkout Form -->
           <div class="checkout-form">
             <h3>Checkout Information</h3>
+            <div v-if="loggedInUser" class="auth-notice">
+              <span>✓ Menggunakan profil aktif: <strong>{{ loggedInUser.name }}</strong></span>
+            </div>
             <div class="form-group">
               <label for="checkout-name">Name</label>
               <input 
@@ -149,11 +152,119 @@
             <button 
               class="btn-checkout" 
               :disabled="submittingOrder"
-              @click="submitOrder"
+              @click="startPaymentFlow"
             >
               {{ submittingOrder ? 'Processing...' : 'Place Order Now' }}
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Payment Flow Modal -->
+    <div v-if="showPaymentModal" class="modal-overlay" @click.self="showPaymentModal = false">
+      <div class="modal-content glass-card">
+        <div class="modal-header">
+          <h3>Simulasi Pembayaran (Payment Gateway)</h3>
+          <button class="close-modal-btn" @click="showPaymentModal = false">✕</button>
+        </div>
+
+        <div class="modal-body-content" v-if="paymentProcessing">
+          <div class="payment-loading-state">
+            <div class="spinner"></div>
+            <h4 class="payment-status-title">{{ paymentStatusText }}</h4>
+            <p>Mohon jangan menutup jendela ini...</p>
+          </div>
+        </div>
+
+        <div class="modal-body-content" v-else>
+          <!-- Order Summary inside Modal -->
+          <div class="payment-summary border-bottom">
+            <h4>Ringkasan Pembayaran</h4>
+            <div class="summary-details">
+              <div class="summary-line">
+                <span>Total Belanja ({{ cart.reduce((s, i) => s + i.quantity, 0) }} item):</span>
+                <span class="price-highlight">${{ cartTotal.toFixed(2) }}</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Payment Methods -->
+          <div class="payment-methods-section">
+            <h4>Pilih Metode Pembayaran</h4>
+            <div class="payment-tabs">
+              <button 
+                :class="['payment-tab-btn', { active: paymentMethod === 'card' }]" 
+                @click="paymentMethod = 'card'"
+              >
+                💳 Kartu Kredit/Debit
+              </button>
+              <button 
+                :class="['payment-tab-btn', { active: paymentMethod === 'ewallet' }]" 
+                @click="paymentMethod = 'ewallet'"
+              >
+                📱 E-Wallet / QRIS
+              </button>
+              <button 
+                :class="['payment-tab-btn', { active: paymentMethod === 'transfer' }]" 
+                @click="paymentMethod = 'transfer'"
+              >
+                🏦 Virtual Account
+              </button>
+            </div>
+
+            <!-- Tab Content: Card -->
+            <div v-if="paymentMethod === 'card'" class="tab-pane-content">
+              <div class="form-group-row">
+                <div class="form-group col-12">
+                  <label>Nomor Kartu</label>
+                  <input type="text" v-model="cardInfo.number" placeholder="4111 2222 3333 4444" required />
+                </div>
+              </div>
+              <div class="form-group-row">
+                <div class="form-group col-6">
+                  <label>Masa Berlaku (MM/YY)</label>
+                  <input type="text" v-model="cardInfo.expiry" placeholder="12/29" required />
+                </div>
+                <div class="form-group col-6">
+                  <label>CVV</label>
+                  <input type="password" v-model="cardInfo.cvv" placeholder="•••" maxlength="3" required />
+                </div>
+              </div>
+              <div class="form-group col-12 mt-2">
+                <label>Nama Pemegang Kartu</label>
+                <input type="text" v-model="cardInfo.name" placeholder="John Doe" />
+              </div>
+            </div>
+
+            <!-- Tab Content: E-wallet -->
+            <div v-if="paymentMethod === 'ewallet'" class="tab-pane-content text-center">
+              <div class="qr-code-simulator">
+                <span class="qr-emoji">🔳 QRIS</span>
+                <p class="qr-desc">Scan QRIS menggunakan aplikasi pembayaran pilihan Anda (GoPay, OVO, Dana, dll.)</p>
+              </div>
+              <div class="form-group col-12">
+                <label>Nomor Handphone Terdaftar</label>
+                <input type="tel" v-model="ewalletPhone" placeholder="081234567890" required />
+              </div>
+            </div>
+
+            <!-- Tab Content: Bank Transfer -->
+            <div v-if="paymentMethod === 'transfer'" class="tab-pane-content">
+              <div class="bank-va-details">
+                <p>Transfer melalui Virtual Account Bank Mandiri / BCA:</p>
+                <div class="va-number-box">
+                  <code>8839029103921</code>
+                </div>
+                <p class="va-instructions">Total nominal transfer harus sesuai dengan ringkasan di atas demi verifikasi otomatis.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer" v-if="!paymentProcessing">
+          <button class="btn-secondary" @click="showPaymentModal = false">Batal</button>
+          <button class="btn-primary" @click="handlePay">Bayar Sekarang & Tempatkan Pesanan</button>
         </div>
       </div>
     </div>
@@ -163,6 +274,7 @@
 <script>
 import { ref, computed, onMounted } from 'vue';
 import { showToast } from '../toast';
+import { apiPost } from '../api';
 
 export default {
   name: 'Storefront',
@@ -177,6 +289,15 @@ export default {
     const cart = ref([]);
     const checkoutForm = ref({ name: '', email: '' });
     const submittingOrder = ref(false);
+
+    // Payment Flow state
+    const showPaymentModal = ref(false);
+    const paymentMethod = ref('card');
+    const cardInfo = ref({ number: '', expiry: '', cvv: '', name: '' });
+    const ewalletPhone = ref('');
+    const paymentStatusText = ref('');
+    const paymentProcessing = ref(false);
+    const loggedInUser = ref(null);
 
     const fetchProducts = async () => {
       loading.value = true;
@@ -194,7 +315,15 @@ export default {
       }
     };
 
-    onMounted(fetchProducts);
+    onMounted(() => {
+      fetchProducts();
+      const user = JSON.parse(localStorage.getItem('user'));
+      if (user) {
+        loggedInUser.value = user;
+        checkoutForm.value.name = user.name || '';
+        checkoutForm.value.email = user.email || '';
+      }
+    });
 
     const filteredProducts = computed(() => {
       return products.value.filter(p => {
@@ -261,12 +390,46 @@ export default {
       return cartSubtotal.value + cartTax.value;
     });
 
-    const submitOrder = async () => {
+    const startPaymentFlow = () => {
       if (!checkoutForm.value.name || !checkoutForm.value.email) {
         showToast('Please fill in your name and email to checkout', 'warning');
         return;
       }
+      showPaymentModal.value = true;
+    };
 
+    const handlePay = async () => {
+      if (paymentMethod.value === 'card') {
+        if (!cardInfo.value.number || !cardInfo.value.expiry || !cardInfo.value.cvv) {
+          showToast('Please fill in all card details', 'warning');
+          return;
+        }
+      } else if (paymentMethod.value === 'ewallet') {
+        if (!ewalletPhone.value) {
+          showToast('Please enter your digital wallet phone number', 'warning');
+          return;
+        }
+      }
+
+      paymentProcessing.value = true;
+      paymentStatusText.value = 'Securing connection...';
+      
+      await new Promise(r => setTimeout(r, 800));
+      paymentStatusText.value = 'Authorizing payment details...';
+      
+      await new Promise(r => setTimeout(r, 1000));
+      paymentStatusText.value = 'Completing transaction...';
+      
+      await new Promise(r => setTimeout(r, 600));
+      
+      const success = await submitOrder();
+      paymentProcessing.value = false;
+      if (success) {
+        showPaymentModal.value = false;
+      }
+    };
+
+    const submitOrder = async () => {
       submittingOrder.value = true;
       try {
         const orderData = {
@@ -281,25 +444,27 @@ export default {
           totalAmount: parseFloat(cartTotal.value.toFixed(2))
         };
 
-        const response = await fetch('/api/v1/orders', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(orderData)
-        });
+        const response = await apiPost('/api/v1/orders', orderData);
 
         if (response.ok) {
-          showToast('Order placed successfully! Thank you.', 'success');
+          showToast('Payment successful & Order placed!', 'success');
           cart.value = [];
-          checkoutForm.value = { name: '', email: '' };
+          const user = JSON.parse(localStorage.getItem('user'));
+          if (user) {
+            checkoutForm.value = { name: user.name, email: user.email };
+          } else {
+            checkoutForm.value = { name: '', email: '' };
+          }
           await fetchProducts(); // Refresh products list to show new stock values
+          return true;
         } else {
           const errorData = await response.json();
           showToast(errorData.error || 'Failed to place order', 'error');
+          return false;
         }
       } catch (err) {
         showToast('Network error processing checkout', 'error');
+        return false;
       } finally {
         submittingOrder.value = false;
       }
@@ -324,7 +489,18 @@ export default {
       cartTotal,
       checkoutForm,
       submittingOrder,
-      submitOrder
+      submitOrder,
+
+      // Payment Flow
+      showPaymentModal,
+      paymentMethod,
+      cardInfo,
+      ewalletPhone,
+      paymentStatusText,
+      paymentProcessing,
+      loggedInUser,
+      startPaymentFlow,
+      handlePay
     };
   }
 };
@@ -711,5 +887,226 @@ export default {
   .cart-panel {
     position: static;
   }
+}
+
+/* Auth autofill notice */
+.auth-notice {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--color-success);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+}
+
+/* Modal and Payment styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modal-content {
+  max-width: 550px;
+  width: 100%;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 90vh;
+  animation: modalIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.close-modal-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 18px;
+}
+
+.close-modal-btn:hover {
+  color: var(--text-primary);
+}
+
+.modal-body-content {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.payment-summary {
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+}
+
+.payment-summary.border-bottom {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.payment-summary h4, .payment-methods-section h4 {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.summary-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.price-highlight {
+  font-weight: 700;
+  color: var(--color-accent);
+  font-family: var(--font-mono);
+  font-size: 16px;
+}
+
+.payment-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.payment-tab-btn {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border-color);
+  padding: 10px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-align: center;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.payment-tab-btn.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.tab-pane-content {
+  background: rgba(0,0,0,0.15);
+  border: 1px solid var(--border-color);
+  padding: 20px;
+  border-radius: var(--radius-md);
+  animation: fadeIn 0.2s ease;
+}
+
+.form-group-row {
+  display: flex;
+  gap: 12px;
+}
+
+.col-6 {
+  flex: 1;
+}
+
+.col-12 {
+  width: 100%;
+}
+
+.mt-2 {
+  margin-top: 8px;
+}
+
+.qr-code-simulator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.qr-emoji {
+  font-size: 32px;
+  background: white;
+  color: black;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  font-weight: bold;
+}
+
+.qr-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.bank-va-details {
+  text-align: center;
+}
+
+.va-number-box {
+  background: rgba(255,255,255,0.05);
+  border: 1px dashed var(--color-primary);
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  margin: 16px 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.va-instructions {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.payment-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+  text-align: center;
+}
+
+.payment-status-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-top: 16px;
+  color: var(--text-primary);
+}
+
+@keyframes modalIn {
+  from { transform: translateY(30px) scale(0.95); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
 }
 </style>
